@@ -10,16 +10,20 @@ import { WebinarTooManySeatsException } from "../exceptions/webinar-too-many-sea
 
 
 describe('Feature : Change seats', () => {
+
   let webinarRepository: InMemoryWebinarRepository;
   let useCase: ChangeSeats;
 
+  const existingWebinarId = '12H6-TBS8-36DH-D62D';
+  const initialSeats = 100;
+
   const webinar = new Webinar({
-    id: '12H6-TBS8-36DH-D62D',
+    id: existingWebinarId,
     organizerId: testUser.alice.props.id,
     title: 'Webinar title',
     startDate: new Date('2024-01-01T00:00:00Z'),
     endDate: new Date('2024-01-01T01:00:00Z'),
-    seats: 100,
+    seats: initialSeats,
   });
 
   beforeEach(() => {
@@ -27,63 +31,70 @@ describe('Feature : Change seats', () => {
     useCase = new ChangeSeats(webinarRepository);
   });
 
+  // Méthodes partagé
+  async function whenUserChangeSeatsWith(payload: { user: any; webinarId: string; seats: number }) {
+    await useCase.execute(payload);
+  }
+
+  async function expectWebinarToRemainUnchanged() {
+    const unchangedWebinar = await webinarRepository.findById(existingWebinarId);
+    expect(unchangedWebinar?.props.seats).toEqual(initialSeats);
+  }
+
+  async function thenUpdatedWebinarSeatsShouldBe(seats: number) {
+    const updatedWebinar = await webinarRepository.findById(existingWebinarId);
+    expect(updatedWebinar?.props.seats).toEqual(seats);
+  }
+
   describe('Scenario: Webinar does not exist', () => {
     const payload = {
       user: testUser.alice,
-      webinarId: '12HD-JSYZ-EYDH-DY32',
+      webinarId: 'hgf6-GHGJ-4FJH-3FJH',
       seats: 200,
     };
 
-    it('should fail', async () => {
+    it('should throw WebinarNotFoundException', async () => {
       await expect(useCase.execute(payload)).rejects.toThrow(WebinarNotFoundException);
-
-      const existingWebinar = await webinarRepository.findById('12H6-TBS8-36DH-D62D');
-      expect(existingWebinar?.props.seats).toEqual(100);
+      await expectWebinarToRemainUnchanged();
     });
   });
 
   describe('Scenario: Reduce seats to an inferior number', () => {
     const payload = {
       user: testUser.alice,
-      webinarId: '12H6-TBS8-36DH-D62D',
+      webinarId: existingWebinarId,
       seats: 50,
     };
 
-    it('should throw a WebinarReduceSeatsException', async () => {
+    it('should throw WebinarReduceSeatsException', async () => {
       await expect(useCase.execute(payload)).rejects.toThrow(WebinarReduceSeatsException);
-
-      const existingWebinar = await webinarRepository.findById('12H6-TBS8-36DH-D62D');
-      expect(existingWebinar?.props.seats).toEqual(100);
+      await expectWebinarToRemainUnchanged();
     });
   });
 
   describe('Scenario: Too many seats', () => {
     const payload = {
       user: testUser.alice,
-      webinarId: '12H6-TBS8-36DH-D62D',
+      webinarId: existingWebinarId,
       seats: 1001,
     };
 
-    it('should throw a WebinarTooManySeatsException', async () => {
+    it('should throw WebinarTooManySeatsException', async () => {
       await expect(useCase.execute(payload)).rejects.toThrow(WebinarTooManySeatsException);
-
-      const existingWebinar = await webinarRepository.findById('12H6-TBS8-36DH-D62D');
-      expect(existingWebinar?.props.seats).toEqual(100);
+      await expectWebinarToRemainUnchanged();
     });
   });
 
   describe('Scenario: Happy path', () => {
     const payload = {
       user: testUser.alice,
-      webinarId: '12H6-TBS8-36DH-D62D',
+      webinarId: existingWebinarId,
       seats: 200,
     };
 
     it('should change the number of seats for a webinar', async () => {
-      await useCase.execute(payload);
-
-      const updatedWebinar = await webinarRepository.findById('12H6-TBS8-36DH-D62D');
-      expect(updatedWebinar?.props.seats).toEqual(200);
+      await whenUserChangeSeatsWith(payload);
+      await thenUpdatedWebinarSeatsShouldBe(200);
     });
   });
 });
